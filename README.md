@@ -79,3 +79,5 @@ have an understanding of what each represents. A brief overview is provided in t
 The Postman collection provided is a subset of what you will be marked with so passing these tests should be your highest
 priority. If you find an inconsistency or issue with the reference server please reach out to Morgan English 
 `morgan.english@canterbury.ac.nz`.
+
+test cmd
