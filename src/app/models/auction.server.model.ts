@@ -3,7 +3,7 @@ import {getPool} from "../../config/db";
 import Logger from "../../config/logger";
 
 // ——————————————————————————————CHECK——————————————————————————————————
-// for checking if category is in category list
+// for checking if category is in the category list
 const getCategory= async (categoryId: number) : Promise<Category[]> => {
     Logger.info(`Checking if category_id is in category list in the database`);
     const conn = await getPool().getConnection();
