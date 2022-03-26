@@ -1,6 +1,6 @@
-import { getPool } from "../../config/db";
-import Logger from "../../config/logger";
 import {ResultSetHeader} from "mysql2";
+import {getPool} from "../../config/db";
+import Logger from "../../config/logger";
 
 // ——————————————————————————————CHECK——————————————————————————————————
 // for checking if category is in category list
@@ -46,14 +46,12 @@ const getAllAuctions = async (keywords:string[], whereParams:{[key:string]:strin
     Promise<Auction[]> => {
     Logger.info( 'Getting action list with related parameters from database...' );
     const conn = await getPool().getConnection();
-    const query: string =
-        'SELECT DISTINCT(auction.id) as auctionId,title,category_id as categoryId,seller_id as sellerId,user.first_name AS sellerFirstName,' +
+    let finalQueryString = 'SELECT DISTINCT(auction.id) as auctionId,title,category_id as categoryId,seller_id as sellerId,user.first_name AS sellerFirstName,' +
         'user.last_name AS sellerLastName,reserve,COUNT(auction_bid.id) AS numBids,MAX(auction_bid.amount) AS highestBid,' +
         'end_date as endDate,description ' +
         'FROM auction ' +
         'INNER JOIN user ON user.id = auction.seller_id ' +
-        'LEFT JOIN auction_bid ON auction_bid.auction_id = auction.id '
-    let finalQueryString = query;
+        'LEFT JOIN auction_bid ON auction_bid.auction_id = auction.id ';
     let whereQueryString: string = '';
     let keywordQueryString: string = '';
     let categoryQueryString: string = '';
@@ -141,7 +139,7 @@ const getAnAuctionBids = async (auctionId: number) : Promise<Auction[]> => {
 const createAuction = async (auctionDetails: string[]) : Promise<ResultSetHeader> => {
     Logger.info(`Adding an auction to the database`);
     const conn = await getPool().getConnection();
-    let query: string = '';
+    let query: string;
     if (auctionDetails.length === 5){
         query = 'insert into auction (title, description, category_id, end_date, seller_id) values (?)';
     }else{
@@ -172,7 +170,6 @@ const updateAuctionDetails = async (auctionId: number, auctionChangeList: {[key:
     }
     const finalQueryString = queryString.substring(0, queryString.length - 1);
     const finalQuery = `update auction set ${finalQueryString} where id = ${auctionId}`;
-    Logger.info(finalQuery);
     const [editAuctionRows] = await conn.query(finalQuery);
     conn.release();
     return editAuctionRows;

@@ -1,6 +1,6 @@
 import { getPool } from "../../config/db";
-import Logger from "../../config/logger";
 import {ResultSetHeader} from "mysql2";
+import Logger from "../../config/logger";
 
 // ——————————————————————————————CHECK——————————————————————————————————
 const getUserByEmail = async (email: string): Promise<any> =>{
@@ -89,7 +89,6 @@ const updateUserDetails = async (userId: number, updateDetails: {}) : Promise<an
     }
     const finalQueryString = queryString.substring(0, queryString.length - 1);
     const finalQuery = `update user set ${finalQueryString} where id = ${userId}`;
-    Logger.info(finalQuery);
     const [editUserRows] = await conn.query(finalQuery);
     conn.release();
     return editUserRows;

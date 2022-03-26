@@ -2,8 +2,6 @@ import express from "express";
 import bodyParser from "body-parser"
 import allowCrossOriginRequestsMiddleware from '../app/middleware/cors.middleware';
 import Logger from "./logger";
-// import sessions from "express-session";
-// import cookieParser from "cookie-parser";
 
 export default () => {
     const app = express();

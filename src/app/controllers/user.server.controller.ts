@@ -164,7 +164,7 @@ const getUser = async (req: Request, res: Response) : Promise<void> => {
 
 // return an user's profile image given user id
 const getUserImage = async (req: Request, res: Response) : Promise<any> => {
-    Logger.http(`Get user id: ${req.params.id}'s profile photo`)
+    Logger.http(`Get user id: ${req.params.id}'s profile photo`);
     const requestId = parseInt(req.params.id,10);
     // get profile image name by id
     let fileName :string = null;
@@ -268,7 +268,7 @@ const changeUser = async (req: Request, res: Response) : Promise<void> => {
 // ——————————————————————————————PUT Methods——————————————————————————————————
 // update user's profile image. Authentication by given request header `token`
 const setUserImage = async (req: Request, res: Response) : Promise<void> => {
-    Logger.http(`Set user ${req.params.id}'s profile image`)
+    Logger.http(`Set user ${req.params.id}'s profile image`);
     const requestId = parseInt(req.params.id,10)
     const imageType = req.headers['content-type'].substring(6,).toLowerCase();
     // use express.raw({type}) to parse request body
@@ -323,7 +323,7 @@ const setUserImage = async (req: Request, res: Response) : Promise<void> => {
 // ——————————————————————————————DELETE Methods——————————————————————————————————
 // delete user's profile image. Authentication by given request header `token`
 const removeUserImage = async (req: Request, res: Response) : Promise<any> => {
-    Logger.http(`Delete user ${req.params.id}'s profile photo`)
+    Logger.http(`Delete user ${req.params.id}'s profile photo`);
     const requestId = parseInt(req.params.id,10);
     // get profile image name by id
     let fileName :string = null;

@@ -1,7 +1,7 @@
-import * as auctions from '../models/auction.server.model';
 import Logger from "../../config/logger";
 import {Request, Response} from "express";
 import * as validation from '../middleware/validation';
+import * as auctions from '../models/auction.server.model';
 import * as fs from "fs";
 
 // ——————————————————————————————————CHECK————————————————————————————————————
@@ -127,7 +127,7 @@ const createAuction = async (req: Request, res: Response) : Promise<void> => {
 // create a bid with request body `amount`
 // Authentication required
 const addBid = async (req: Request, res: Response) : Promise<void> => {
-    Logger.http(`Put auction bid`)
+    Logger.http(`Put auction bid`);
     const auctionId = parseInt(req.params.id, 10);
     const userId = res.locals.id;
     // check if request auction exist in database, if not 404
@@ -293,7 +293,7 @@ const getAuctionList = async (req:any, res:any) : Promise<any> => {
 
 // get an auction with give request parameter: auction id
 const getAuction = async (req: Request, res: Response) : Promise<void> => {
-    Logger.http(`GET single auction id: ${req.params.id}`)
+    Logger.http(`GET single auction id: ${req.params.id}`);
     const auctionId = parseInt(req.params.id,10);
     // check if request auction exist in database, if not 404
     await isAuctionExist(auctionId,res);
@@ -311,7 +311,7 @@ const getAuction = async (req: Request, res: Response) : Promise<void> => {
 
 // Retrieve list of all categories with categoryId and name values
 const listCategory = async (req: Request, res: Response) : Promise<any> => {
-    Logger.http(`Retrieve all data about auction categories`)
+    Logger.http(`Retrieve all data about auction categories`);
     try {
         const result = await auctions.getAllCategory();
         res.status( 200 ).send( result );
@@ -323,7 +323,7 @@ const listCategory = async (req: Request, res: Response) : Promise<any> => {
 
 // get all bids of an auction with given request parameter: auciton id
 const getAuctionBids = async (req: Request, res: Response) : Promise<void> => {
-    Logger.http(`GET auction id: ${req.params.id}'s bids`)
+    Logger.http(`GET auction id: ${req.params.id}'s bids`);
     const id = req.params.id;
     try {
         const result = await auctions.getAnAuctionBids( parseInt(id, 10) );
@@ -341,7 +341,7 @@ const getAuctionBids = async (req: Request, res: Response) : Promise<void> => {
 // update an auction with given request parameter: auction id and contents in request body
 // Authentication required
 const changeAuction = async (req: Request, res: Response) : Promise<void> => {
-    Logger.http(`Change an auction id: ${req.params.id}'s details`)
+    Logger.http(`Change an auction id: ${req.params.id}'s details`);
     const auctionId = parseInt(req.params.id,10);
     const auctionChangeList : { [key:string]:string } = {};
     // Not accessible after a bid has been placed.
@@ -432,7 +432,7 @@ const removeAuction = async (req: Request, res: Response) : Promise<any> => {
 // upload an image for an auction with given request parameter: auction id
 // Authentication required
 const setAuctionImage = async (req: Request, res: Response) : Promise<void> => {
-    Logger.http(`Set auction ${req.params.id}'s profile image`)
+    Logger.http(`Set auction ${req.params.id}'s profile image`);
     const requestAuctionId = parseInt(req.params.id,10)
     const imageType = req.headers['content-type'].substring(6,).toLowerCase();
     // use express.raw({type}) to parse request body
@@ -491,7 +491,7 @@ const setAuctionImage = async (req: Request, res: Response) : Promise<void> => {
 // get the profile image of an auction with given request parameter: auction id
 // Authentication required
 const getAuctionImage = async (req: Request, res: Response) : Promise<any> => {
-    Logger.http(`Get auction id: ${req.params.id}'s profile photo`)
+    Logger.http(`Get auction id: ${req.params.id}'s profile photo`);
     const requestAuctionId = parseInt(req.params.id,10);
     // get profile image name by id
     let fileName :string = 'NULL';
