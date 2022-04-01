@@ -3,26 +3,51 @@ import {NextFunction, Request, Response} from "express";
 import * as auctions from '../models/auction.server.model';
 import * as users from '../models/user.server.model';
 
+// if user provided token, get user id by token
+const loggedIn = async (req: Request, res:Response, next: NextFunction): Promise<any> => {
+    let token: string | string[] = '';
+    if(typeof(req.headers["x-authorization"]) === 'string' && req.headers["x-authorization"].length > 0){
+        token = req.headers["x-authorization"];
+        try{
+            const result =  (await users.getUserByToken(token));
+            if (result === null) {
+                // can not find any user related to given token
+                res.status(404).send(`User not found`);
+                return;
+            }else{
+                // set object with user_id and email and return true
+                res.locals.id = result[0];
+                next();
+            }
+        }catch(err){
+            res.status( 500 ).send( `ERROR get user by token: ${ err }`);
+            }
+    }else{
+        res.locals.id = undefined;
+        next();
+    }
+}
+
 // return user id, email if logged in, otherwise return http code
 const loggedInRequired = async (req: Request, res:Response, next: NextFunction): Promise<any> => {
     Logger.info('Checking if user logged in...')
     let token: string | string[] = '';
-    if(typeof(req.headers["x-authorization"]) === 'string'){
+    if(typeof(req.headers["x-authorization"]) === 'string' && req.headers["x-authorization"].length > 0){
       token = req.headers["x-authorization"];
     }else{
         res.status(401).send(`Token not valid`);
         return;
     }
     try{
-        const result =  (await users.getUserByToken(token));
-        if (result.length === 0) {
-            // can not find any user related to given API Key
-            res.status(401).send(`Please login`);
+        const result = await users.getUserByToken(token);
+        if (result === null) {
+            // can not find any user related to given token
+            res.status(404).send(`User not found`);
             return;
         }else{
             // set object with user_id and email and return true
-            res.locals.id = result[0].id;
-            res.locals.email = result[0].email;
+            res.locals.id = result[0];
+            res.locals.email = result[1];
             next();
         }
     }catch(err){
@@ -68,4 +93,4 @@ const isSeller = async (req: Request, res:Response, next: NextFunction): Promise
     }
 }
 
-export {loggedInRequired, isUser, isSeller}
+export {loggedIn, loggedInRequired, isUser, isSeller}

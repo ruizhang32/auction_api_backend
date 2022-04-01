@@ -13,7 +13,7 @@ module.exports = (app: Express) => {
         .post(authentication.loggedInRequired, users.logout);
 
     app.route('/api/v1/users/:id')
-        .get(authentication.loggedInRequired, users.getUser)
+        .get(authentication.loggedIn, users.getUser)
         .patch(authentication.loggedInRequired, authentication.isUser, users.changeUser)
 
     app.route('/api/v1/users/:id/image')

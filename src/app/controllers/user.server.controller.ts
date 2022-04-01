@@ -9,15 +9,12 @@ import * as fs from "fs";
 // ——————————————————————————————CHECK——————————————————————————————————
 const doesEmailExist = async(email: string, res: Response): Promise<any>=>{
     try{
-        const result = await users.getUserByEmail(email); // check email has not been registered yet
-        if(result.length === 1){
-            return result[0].count === 1;
-        }else{
-            res.status(400).send("The email address hasn't been registered");
-            return;
-        }
-    }catch(err){
-        res.status( 500 ).send( `ERROR getting user by email: ${email}: ${err}` );
+        const result = await users.getUserInfoByEmail(email); // check email has not been registered yet
+        // if result is null, means can not find any user related with this email, so has not been registered
+        return result !== null;
+    }
+    catch(err) {
+        res.status(500).send(`ERROR getting user by email: ${email}: ${err}`);
     }
 }
 
@@ -48,16 +45,20 @@ const createUser = async (req: Request, res: Response) : Promise<void> => {
     }if(!await validation.isPasswordValid(password)) {
         res.status(400).send("Password has to be 'string' , minimum length of password is 1");
         return;
-    }if(await doesEmailExist(email, res)){ // check email has not been registered yet
-        res.status(400).send("The email address has already be in use");
-        return;
-    }else {
-        try {
+    }
+    else {
+        if(!await doesEmailExist(email, res)){
+           try {
             const encryptedPassword = await bcrypt.hash(password, 10);
             const result = await users.createAnUser(firstName, lastName, email, encryptedPassword);
-            res.status( 201 ).json({"userId": result.insertId} );
-        } catch( err ) {
-            res.status( 500 ).send( `ERROR registering ${email}: ${err}` );
+            res.status( 201 ).json( result );
+            return;
+            } catch( err ) {
+                res.status( 500 ).send( `ERROR registering ${email}: ${err}` );
+            }
+        }else{
+            res.status(400).send("This email has been registered");
+            return;
         }
     }
 }; // 201,400,500
@@ -74,50 +75,49 @@ const login = async (req: Request, res: Response) : Promise<any> => {
     if(!await validation.isEmailValid(email)){
         res.status(400).send("Not valid email address");
         return;
-    }if(!await doesEmailExist(email,res)){
-        res.status(400).send("The email address hasn't been registered yet");
-        return;
-    }if(!await validation.isPasswordValid(password)) {
+    }
+    if(!await validation.isPasswordValid(password)) {
         res.status(400).send("Password has to be 'string' , minimum length of password is 1");
         return;
-    }else{
-        try{
-            /*get user id and password by email from database*/
-            const userDetails = await users.getUserInfoByEmail(email);
-            let pswInDB: string = '';
-            let userId: number = 0;
-            let match: boolean = false;
-            if(userDetails.length === 1){
-                pswInDB = userDetails[0].password;
-                userId = userDetails[0].id;
-                match = await bcrypt.compare(password, pswInDB);
-            }else{
+    }
+    else if(await doesEmailExist(email, res)){
+        /*get user id and password by email from database*/
+            const result = await users.getUserInfoByEmail(email);
+            if (result === null){
                 res.status(404).send(`User not found`);
                 return;
             }
-            if(match) {
-                const uuidAPIKeypair = uuidAPIKey.create();
-                const apikey = uuidAPIKeypair.apiKey;
-                const loginTime: string = new Date().toISOString();
-                try{
-                   const result = await users.updateTokenInDB(email,apikey);
-                   if(result.affectedRows === 1){
-                       return res.status(200).json({
-                          // msg: 'Logged in!',
-                          userId,
-                          token:apikey,
-                          loginTime
-                      });
-                   }
-                }catch(err){
-                    res.status(500).send(`ERROR login user ${email}: ${err}`);
+            else if (result === Error){
+                res.status(500).send(`ERROR login user ${email}: ${Error}`);
+                return;
+            }
+            else{ // if get user id from email
+                let pswInDB: string;
+                let userId: number;
+                let match: boolean;
+                pswInDB = result.password;
+                userId = result.id;
+                // compare password passed by request body with password in database
+                match = await bcrypt.compare(password, pswInDB);
+                // if matches, generate a token and update token attribute in database
+                if(match) {
+                    const uuidAPIKeypair = uuidAPIKey.create();
+                    const apikey = uuidAPIKeypair.apiKey;
+                    try{
+                        await users.updateTokenInDB(email,apikey);
+                        return res.status(200).json({
+                            'userId':userId,
+                            'token':apikey
+                        });
+                    }catch(err){
+                        res.status(500).send(`ERROR login user ${email}: ${err}`);
+                        return;
+                    }
+                }
+                else{
+                    res.status(400).send({msg:'Wrong password. Please try again'})
                     return;
                 }
-            }else{
-                res.status(400).send({msg:'Wrong password. Please try again'})
-            }
-        }catch(err) {
-            res.status(500).send(`ERROR login user ${email}: ${err}`);
         }
     }
 };// 200,400,500
@@ -126,13 +126,11 @@ const login = async (req: Request, res: Response) : Promise<any> => {
 const logout = async (req: Request, res: Response) : Promise<any> => {
     Logger.http('Logging out user...');
     const email = res.locals.email;
-        try {
-        const result = await users.logoutUser(email);
-        if(result.affectedRows !== 0){
-            res.status( 200 ).json( {msg: 'Logged out!'} );
-        }
-    } catch( err ) {
-            res.status( 500 ).send( `ERROR logout user ${email}: ${ err }`);
+    try{
+        await users.logoutUser(email);
+        res.status( 200 ).send();
+    }catch(err){
+        res.status( 500 ).send( `ERROR logout user ${email}: ${ Error }`);
     }
 };// 200,401,500
 
@@ -141,23 +139,15 @@ const logout = async (req: Request, res: Response) : Promise<any> => {
 const getUser = async (req: Request, res: Response) : Promise<void> => {
     Logger.http(`GET user id: ${req.params.id}'s information.`);
     const requestId = parseInt(req.params.id,10);
-    try {
-        const result = await users.getAnUser( requestId );
-        if( result.length === 0 ){
+    const userId = res.locals.id;
+    try{
+        const result = await users.getAnUser(requestId, userId);
+        if(result === null){
             res.status( 404 ).send('User not found');
-            return;
-        } else {
-            const first_name = result[0].first_name;
-            const last_name = result[0].last_name;
-            const email = result[0].email;
-            const userId = res.locals.id;
-            if(userId === requestId){
-               res.status( 200 ).json( {'firstName': first_name, 'lastName': last_name, 'email': email} );
-            }else{
-                res.status( 200 ).json( {'firstName': first_name, 'lastName': last_name} );
-            }
+        }else {
+            res.status( 200 ).json( result );
         }
-    } catch( err ) {
+    }catch(err){
         res.status( 500 ).send( `ERROR reading user ${requestId}: ${ err }`);
     }
 };// 200,404,500
@@ -170,21 +160,21 @@ const getUserImage = async (req: Request, res: Response) : Promise<any> => {
     let fileName :string = null;
     try{
         const result = await users.getUserProfileImage(requestId);
-        fileName = result[0].image_filename;
-        if(fileName !== null){
+        if(result === null){
+            res.status( 404 ).send('No profile image yet');
+        }else{
+            fileName = result;
             const filePath = 'storage/images/' + fileName;
             const fileType = fileName.split('.')[1];
             if(await validation.isImageTypeValid(fileType)){
                 try{
                     return res.status(200).attachment(filePath).send();
                 }catch(err){
-                   res.status(500).send(`fs reading ERROR: ${ err }`);
+                    res.status(500).send(`fs reading ERROR: ${ err }`);
                 }
             }
-        }else{
-            res.status( 404 ).send('No profile image yet');
         }
-    }catch (err){
+    }catch(err){
         res.status( 500 ).send( `ERROR getting user ${req.params.id}'s profile photo name: ${ err }`);
     }
 };// 200,404,500
@@ -202,65 +192,68 @@ const changeUser = async (req: Request, res: Response) : Promise<void> => {
         return;
     }
     //  check request body schema and availability
-    else{
-        if (req.body.hasOwnProperty('firstName')){
+    else {
+        if (req.body.hasOwnProperty('firstName')) {
             const firstName = req.body.firstName;
-            if(!await validation.isNameValid(firstName)) {
+            if (!await validation.isNameValid(firstName)) {
                 res.status(400).send("First name has to be 'string' , minimum length of names is 1");
                 return;
-            }else{
+            } else {
                 updateDetails.first_name = firstName;
             }
-        }if (req.body.hasOwnProperty('lastName')){
+        }
+        if (req.body.hasOwnProperty('lastName')) {
             const lastName = req.body.lastName;
-            if(!await validation.isNameValid(lastName)) {
+            if (!await validation.isNameValid(lastName)) {
                 res.status(400).send("Last name has to be 'string' , minimum length of names is 1");
                 return;
-            }else{
+            } else {
                 updateDetails.last_name = lastName;
             }
-        }if(req.body.hasOwnProperty('email')){
+        }
+        if (req.body.hasOwnProperty('email')) {
             const email = req.body.email;
-            if(!await validation.isEmailValid(email)){
+            if (!await validation.isEmailValid(email)) {
                 res.status(400).send("Not valid email address");
                 return;
-            }if(await doesEmailExist(email,res)){
-                res.status(400).send("The email address has already be in use");
-                return;
-            }else{
+            }
+            else {
                 updateDetails.email = email;
             }
-        }if(req.body.hasOwnProperty('password')){
+        }
+        if (req.body.hasOwnProperty('password')) {
             const password = req.body.password;
             const currentPassword = req.body.currentPassword;
             let passwordInDB: string = '';
             try{
-                const result = await users.getAnUser(requestId);
-                if(result.length === 1){
-                     passwordInDB = result[0].password;
+                const result1 = await users.getPasswordById(requestId);
+                if (result1 === null) {
+                    res.status(400).send('User not found');
+                }
+                else {
+                    passwordInDB = result1;
+                    const match = await bcrypt.compare(currentPassword, passwordInDB);
+                    if (!await validation.isPasswordValid(password)) {
+                        res.status(400).send("Password has to be 'string' , minimum length of password is 1");
+                        return;
+                    }
+                    if (!match) {
+                        res.status(401).send("Current password is invalid");
+                        return;
+                    } else {
+                        updateDetails.password = await bcrypt.hash(password, 10);
+                    }
                 }
             }catch(err){
-                res.status( 500 ).send( `ERROR get user by id:'${requestId}': ${ err }`);
-                return;
-            }
-            const match = await bcrypt.compare(currentPassword, passwordInDB);
-            if(!await validation.isPasswordValid(password)) {
-                res.status(400).send("Password has to be 'string' , minimum length of password is 1");
-                return;
-            }if (!match){
-                res.status(401).send("Current password is invalid");
-                return;
-            }
-            else{
-                updateDetails.password = await bcrypt.hash(password, 10);
+                res.status(500).send(`ERROR get user by id:'${requestId}': ${err}`);
+                    return;
             }
         }
     }
-    try {
-        const result = await users.updateUserDetails(requestId, updateDetails);
-        if(result.affectedRows !== 0 ){
-        res.status( 200 ).send();}
-    } catch( err ) {
+    try{
+        await users.updateUserDetails(requestId, updateDetails);
+        res.status( 200 ).send();
+    }catch(err){
         res.status( 500 ).send( `ERROR updating user ${requestId}'s details: ${ err }`);
     }
 };// 200,400,401,403,500
@@ -296,14 +289,9 @@ const setUserImage = async (req: Request, res: Response) : Promise<void> => {
     let imageFileExist : boolean = false;
     try{
         const result = await users.getProfilePhotoById(requestId);
-        if (result.length === 1){
-            if(result[0].image_filename !== null){
-                imageFileExist = true;
-            }
-        }
+        imageFileExist = result !== null;
     }catch(err){
         res.status( 500 ).send( `ERROR get user's photo by id:${requestId} : ${ err }`);
-        return;
     }
     try{
         await users.updateUserProfileImage(requestId,fileName);
@@ -317,7 +305,6 @@ const setUserImage = async (req: Request, res: Response) : Promise<void> => {
     }catch(err){
         res.status( 500 ).send( `ERROR updating user ${requestId}: ${ err }`);
     }
-
 };// 200,201,400,401,403,404,500
 
 // ——————————————————————————————DELETE Methods——————————————————————————————————
@@ -329,7 +316,9 @@ const removeUserImage = async (req: Request, res: Response) : Promise<any> => {
     let fileName :string = null;
     try{
         const result = await users.getUserProfileImage(requestId);
-        if(result.length === 1){
+        if(result === null){
+            res.status(404).send("Profile photo doesn't exist")
+        }else{
             fileName = result[0].image_filename;
         }
     }catch (err){
@@ -338,10 +327,8 @@ const removeUserImage = async (req: Request, res: Response) : Promise<any> => {
     const filePath = 'storage/images/' + fileName;
     await fs.unlinkSync(filePath);
     try {
-        const result = await users.deleteUserProfileImage(requestId);
-        if(result.affectedRows !== 0 ){
-            res.status( 200 ).send( 'User profile photo has been deleted' );
-        }
+        await users.deleteUserProfileImage(requestId);
+        res.status( 200 ).send( 'User profile photo has been deleted' );
     } catch( err ) {
         res.status( 500 ).send( `ERROR deleting user ${requestId}'s User profile photo: ${ err }`);
     }

@@ -1,6 +1,7 @@
 import Logger from "../../config/logger";
 import {Request, Response} from "express";
 import * as validation from '../middleware/validation';
+import {getAnAuction} from "../models/auction.server.model";
 import * as auctions from '../models/auction.server.model';
 import * as fs from "fs";
 
@@ -39,8 +40,8 @@ const isAuctionExist = async (auctionId: number, res: Response): Promise<any> =>
 const isCategoryIdValid = async (categoryId: number,res:Response) : Promise<any> => {
     try{
         const result = await auctions.getCategory(categoryId);
-        if(result.length === 1){
-            return typeof(categoryId) === 'number';
+        if(result !== null){
+            return;
         }else{
             res.status( 404 ).send( `Category not found`);
             return;
@@ -56,8 +57,10 @@ const isBidAmountValid = async (bidAmount: number, auctionId: number,res: Respon
     try{
         const result = await auctions.getHighestBidByAuction(auctionId);
         let highestRecentBid :number;
-        if(result.length === 1){
-            highestRecentBid = result[0].highestRecentBid;
+        if(result !== null){
+            highestRecentBid = result;
+        }else{
+            highestRecentBid = 0;
         }
         return highestRecentBid < bidAmount;
     }catch(err){
@@ -79,7 +82,7 @@ const createAuction = async (req: Request, res: Response) : Promise<void> => {
     }else{
         try{
             const result = await auctions.getAuctionByTitle(title);
-            if(result.length === 1){
+            if(result === 1){
                 res.status(400).send(`There is an auction has title '${title}', please use another title`)
             }
         }catch(err){
@@ -116,8 +119,8 @@ const createAuction = async (req: Request, res: Response) : Promise<void> => {
     }
     // if all requested parameters are qualified, then query
     try {
-        const result = await auctions.createAuction(auctionDetails);
-        res.status( 201 ).send({"auctionId": result.insertId} );
+        const result = await auctions.createAnAuction(auctionDetails);
+        res.status( 201 ).send(result);
     } catch( err ) {
         res.status( 500 ).send( `ERROR creating auction ${title}: ${err}` );
         return;
@@ -280,11 +283,8 @@ const getAuctionList = async (req:any, res:any) : Promise<any> => {
     }
     try {
         const result = await auctions.getAllAuctions(keywords, whereParams,categoryList,sortBy,count,startIndex);
-        if(result.length !== 0){
-            res.status( 200 ).json( {"auctions": result, count: result.length});
-        }else{
-            res.status( 200 ).send( {"auctions":[], count: 0 } );
-        }
+        res.status( 200 ).json( result );
+
     } catch( err ) {
         res.status( 500 )
         .send( `ERROR getting users ${ err }` );
@@ -298,10 +298,10 @@ const getAuction = async (req: Request, res: Response) : Promise<void> => {
     // check if request auction exist in database, if not 404
     await isAuctionExist(auctionId,res);
     try {const result = await auctions.getAnAuction(auctionId);
-        if( result.length === 0 ){
+        if( result === null ){
             res.status( 404 ).send('Auction not found');
         } else {
-            res.status( 200 ).send( result[0] );
+            res.status( 200 ).send( result );
     }
     } catch( err ) {
         res.status( 500 ).send( `ERROR reading auction ${auctionId}: ${ err }`
@@ -314,7 +314,11 @@ const listCategory = async (req: Request, res: Response) : Promise<any> => {
     Logger.http(`Retrieve all data about auction categories`);
     try {
         const result = await auctions.getAllCategory();
-        res.status( 200 ).send( result );
+        if( result === null ){
+            res.status( 404 ).json( result );
+        } else {
+            res.status( 200 ).json( result );
+        }
     } catch( err ) {
         res.status( 500 ).send( `ERROR retrieving category list}: ${ err }`
     );
@@ -327,8 +331,8 @@ const getAuctionBids = async (req: Request, res: Response) : Promise<void> => {
     const id = req.params.id;
     try {
         const result = await auctions.getAnAuctionBids( parseInt(id, 10) );
-        if( result.length === 0 ){
-            res.status( 404 ).json([]);
+        if( result === null ){
+            res.status( 404 ).json( result );
         } else {
             res.status( 200 ).json( result );
         }
@@ -343,6 +347,14 @@ const getAuctionBids = async (req: Request, res: Response) : Promise<void> => {
 const changeAuction = async (req: Request, res: Response) : Promise<void> => {
     Logger.http(`Change an auction id: ${req.params.id}'s details`);
     const auctionId = parseInt(req.params.id,10);
+    try{
+        const result = await getAnAuction(auctionId);
+        if (result === null){
+            res.status( 404 ).send('Auction not found');
+        }
+    }catch(err){
+        res.status( 500 ).send( `ERROR reading auction ${auctionId}: ${ err }`)
+    }
     const auctionChangeList : { [key:string]:string } = {};
     // Not accessible after a bid has been placed.
     if(!await isThereAnyBids(auctionId,res)){
@@ -393,12 +405,8 @@ const changeAuction = async (req: Request, res: Response) : Promise<void> => {
             }
         }
         try {
-            const result = await auctions.updateAuctionDetails(auctionId, auctionChangeList);
-            if(result.affectedRows !== 1 ){
-                res.status( 404 ).send('Auction not found');
-            } else {
-                res.status( 200 ).send();
-            }
+            await auctions.updateAuctionDetails(auctionId, auctionChangeList);
+            res.status( 200 ).send();
         } catch( err ) {
             res.status( 500 ).send( `ERROR updating auction ${auctionId}: ${ err }`);
         }
@@ -411,17 +419,22 @@ const changeAuction = async (req: Request, res: Response) : Promise<void> => {
 const removeAuction = async (req: Request, res: Response) : Promise<any> => {
     Logger.http(`Delete auction id: ${req.params.id}`);
     const auctionId = parseInt(req.params.id,10);
+    try{
+        const result = await getAnAuction(auctionId);
+        if (result === null){
+            res.status( 404 ).send('Auction not found');
+        }
+    }catch(err){
+        res.status( 500 ).send( `ERROR reading auction ${auctionId}: ${ err }`)
+    }
     // Not accessible after a bid has been placed.
     if(!await isThereAnyBids(auctionId,res)){
-       try {
-        const result = await auctions.deleteAnAuction(auctionId);
-        if(result.affectedRows === 0 ){
-            res.status( 404 ).send('Auction not found');
-        } else {
+       try{
+            await auctions.deleteAnAuction(auctionId);
             res.status( 200 ).send();
-        }} catch( err ) {
+       }catch( err ) {
             res.status( 500 ).send( `ERROR deleting auction ${auctionId}: ${ err }`);
-        }
+       }
     }else{
         res.status(403).send(`No changes may be made after a bid has been placed on an auction`);
         return;
@@ -433,7 +446,15 @@ const removeAuction = async (req: Request, res: Response) : Promise<any> => {
 // Authentication required
 const setAuctionImage = async (req: Request, res: Response) : Promise<void> => {
     Logger.http(`Set auction ${req.params.id}'s profile image`);
-    const requestAuctionId = parseInt(req.params.id,10)
+    const requestAuctionId = parseInt(req.params.id,10);
+    try{
+        const result = await getAnAuction(requestAuctionId);
+        if (result === null){
+            res.status( 404 ).send('Auction not found');
+        }
+    }catch(err){
+        res.status( 500 ).send( `ERROR reading auction ${requestAuctionId}: ${ err }`)
+    }
     const imageType = req.headers['content-type'].substring(6,).toLowerCase();
     // use express.raw({type}) to parse request body
     const imageBinary = req.body;
@@ -466,11 +487,7 @@ const setAuctionImage = async (req: Request, res: Response) : Promise<void> => {
     let imageFileExist : boolean = false;
     try{
         const result = await auctions.getProfilePhotoById(requestAuctionId);
-        if (result.length === 1){
-            if(result[0].image_filename !== null ){
-                imageFileExist = true;
-            }
-        }
+        imageFileExist = result !== null;
     }catch(err){
         res.status( 500 ).send( `ERROR get user's photo by id:${requestAuctionId} : ${ err }`);
     }
@@ -497,8 +514,8 @@ const getAuctionImage = async (req: Request, res: Response) : Promise<any> => {
     let fileName :string = 'NULL';
     try{
         const result = await auctions.getAuctionProfileImage(requestAuctionId);
-        if(result[0] !== undefined){
-            fileName = result[0].image_filename;
+        if(result !== null){
+            fileName = result;
         }else{
            res.status( 404 ).send('No image found');
         }
