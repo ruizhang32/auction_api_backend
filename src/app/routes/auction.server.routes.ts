@@ -4,22 +4,22 @@ import * as authentication from '../middleware/authentication';
 
 module.exports = (app: Express) => {
     app.route('/api/v1/auctions')
-        .get(auctions.getAuctionList)
-        .post(authentication.loggedInRequired, auctions.createAuction);
+        .get(auctions.getAllAuctionsController)
+        .post(authentication.loggedInRequired, auctions.createAuctionController);
 
     app.route('/api/v1/auctions/categories/')
-        .get(auctions.listCategory);
+        .get(auctions.getAllCategoriesController);
 
     app.route('/api/v1/auctions/:id')
-        .get(auctions.getAuction)
-        .patch(authentication.loggedInRequired, authentication.isSeller, auctions.changeAuction)
-        .delete(authentication.loggedInRequired, authentication.isSeller, auctions.removeAuction);
+        .get(auctions.getSingleAuctionController)
+        .patch(authentication.loggedInRequired, authentication.isSeller, auctions.updateAnAuctionController)
+        .delete(authentication.loggedInRequired, authentication.isSeller, auctions.deleteAnAuctionController);
 
     app.route('/api/v1/auctions/:id/bids')
-        .get(auctions.getAuctionBids)
-        .post(authentication.loggedInRequired, auctions.addBid)
+        .get(auctions.getAllAuctionBidsController)
+        .post(authentication.loggedInRequired, auctions.addBidController)
 
     app.route('/api/v1/auctions/:id/image')
-        .get(auctions.getAuctionImage)
+        .get(auctions.getAuctionProfileImageController)
         .put(authentication.loggedInRequired, authentication.isSeller, auctions.setAuctionImage)
 }
